@@ -1,5 +1,23 @@
 #include "GPS.h"
 
+#include <windows.h>
+
+static constexpr DWORD GAME_INIT_POLL_INTERVAL_MS = 100;
+
+DWORD WINAPI GPS::sampInit(LPVOID lpParam)
+{
+	GPS *sender = static_cast<GPS *>(lpParam);
+
+	// Wait for the game to fully initialize (player ped created) before registering hooks
+	while (!sender->stopThread.load() && !FindPlayerPed(0))
+		Sleep(GAME_INIT_POLL_INTERVAL_MS);
+
+	if (!sender->stopThread.load())
+		sender->Run();
+
+	return 0;
+}
+
 void GPS::Run()
 {
 	logger = util::Logger(cfg.LOGFILE_ENABLED);

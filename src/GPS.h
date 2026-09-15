@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -59,6 +60,10 @@
 class GPS
 {
   private:
+	HANDLE hThread = NULL;
+	std::atomic<bool> stopThread{false};
+	static DWORD WINAPI sampInit(LPVOID lpParam);
+
 	void Run();
 	void GameEventHandle();
 	void DrawHudEventHandle();
@@ -104,8 +109,31 @@ class GPS
 	std::mutex pathMutex;
 
   public:
+	GPS(const GPS &) = delete;
+	GPS &operator=(const GPS &) = delete;
+
 	inline GPS()
 	{
-		this->Run();
+		if (GetModuleHandle("samp.dll") != NULL)
+		{
+			this->hThread = CreateThread(NULL, 0, GPS::sampInit, static_cast<LPVOID>(this), 0, NULL);
+			if (this->hThread == NULL)
+				this->Run();
+		}
+		else
+		{
+			this->Run();
+		}
+	}
+
+	inline ~GPS()
+	{
+		if (this->hThread != NULL)
+		{
+			this->stopThread.store(true);
+			WaitForSingleObject(this->hThread, INFINITE);
+			CloseHandle(this->hThread);
+			this->hThread = NULL;
+		}
 	}
 } GPSLineRedux;

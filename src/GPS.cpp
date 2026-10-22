@@ -18,8 +18,62 @@ DWORD WINAPI GPS::sampInit(LPVOID lpParam)
 	return 0;
 }
 
+#if defined(_MSC_VER)
+static void __declspec(naked) HoodlumPathNodeFixTrampoline()
+{
+	__asm {
+		mov eax, dword ptr [esp + 0x1C]
+		test eax, eax
+		jz skip
+		mov dword ptr [eax], esi
+	skip:
+		push 0x01564792
+		ret
+	}
+}
+#elif defined(__GNUC__)
+static void __attribute__((naked)) HoodlumPathNodeFixTrampoline()
+{
+	__asm__ __volatile__(
+		"movl 0x1C(%%esp), %%eax\n\t"
+		"testl %%eax, %%eax\n\t"
+		"jz 1f\n\t"
+		"movl %%esi, (%%eax)\n\t"
+		"1:\n\t"
+		"pushl $0x01564792\n\t"
+		"ret\n\t"
+		:
+		:
+		: "eax"
+	);
+}
+#endif
+
+void GPS::PatchHoodlumPathBug()
+{
+	// Check if running on HOODLUM cracked GTA SA v1.0 US:
+	// HOODLUM replaced the original SecuROM function at 0x00452160 with a JMP (0xE9) to 0x015646A0 (relative offset 0x0111253B).
+	if (*reinterpret_cast<uint8_t *>(0x00452160) != 0xE9 ||
+	    *reinterpret_cast<uint32_t *>(0x00452161) != 0x0111253B)
+		return;
+
+	uint8_t *target = reinterpret_cast<uint8_t *>(0x0156478C);
+
+	// Verify expected original instruction bytes:
+	// mov eax, [esp+1Ch] (8B 44 24 1C)
+	// mov [eax], esi     (89 30)
+	static const uint8_t expectedBytes[6] = {0x8B, 0x44, 0x24, 0x1C, 0x89, 0x30};
+	if (std::memcmp(target, expectedBytes, sizeof(expectedBytes)) != 0)
+		return;
+
+	plugin::patch::RedirectJump(0x0156478C, HoodlumPathNodeFixTrampoline);
+	plugin::patch::SetUChar(0x0156478C + 5, 0x90);
+}
+
 void GPS::Run()
 {
+	PatchHoodlumPathBug();
+
 	logger = util::Logger(cfg.LOGFILE_ENABLED);
 
 	std::ranges::fill(pathNodesToStream, 1);

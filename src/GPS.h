@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <ctime>
 #include <future>
 #include <iomanip>
@@ -63,6 +64,7 @@ class GPS
 	HANDLE hThread = NULL;
 	std::atomic<bool> stopThread{false};
 	static DWORD WINAPI sampInit(LPVOID lpParam);
+	static void PatchHoodlumPathBug();
 
 	void Run();
 	void GameEventHandle();
@@ -114,6 +116,8 @@ class GPS
 
 	inline GPS()
 	{
+		PatchHoodlumPathBug();
+
 		if (GetModuleHandle("samp.dll") != NULL)
 		{
 			this->hThread = CreateThread(NULL, 0, GPS::sampInit, static_cast<LPVOID>(this), 0, NULL);
